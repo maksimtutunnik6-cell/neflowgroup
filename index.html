@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Мої справи</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF1F8;--card:#fff;--ink:#1B2140;--mut:#7A819B;--line:#E1E5F0;--acc:#4F5BFF;--on:#fff;
+--c0:#4F5BFF;--c1:#F59E0B;--c2:#14B8A6;--c3:#EC4899}
+@media(prefers-color-scheme:dark){:root{--bg:#12152A;--card:#1C2040;--ink:#EEF0FF;--mut:#8F96B8;--line:#2A2F55;--acc:#7C86FF;--on:#12152A}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:500 16px/1.4 Manrope,system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 110px}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+h1{font-size:26px;font-weight:800;margin:6px 0 2px;letter-spacing:-.02em}
+.sub{color:var(--mut);margin:0 0 18px}
+.week{display:grid;grid-template-columns:28px repeat(7,1fr) 28px;gap:4px;align-items:center;margin-bottom:18px}
+.nav{color:var(--mut);font-size:22px;padding:0}
+.day{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 6px;border-radius:16px;color:var(--mut)}
+.day b{font-size:17px;color:var(--ink);font-weight:800}
+.day i{width:5px;height:5px;border-radius:50%;background:transparent}
+.day.has i{background:var(--acc)}
+.day.today b{color:var(--acc)}
+.day.sel{background:var(--acc);color:var(--on)}
+.day.sel b{color:var(--on)}.day.sel.has i{background:var(--on)}
+.prog{display:flex;align-items:center;gap:12px;margin-bottom:14px;color:var(--mut);font-size:14px}
+.bar{flex:1;height:8px;border-radius:8px;background:var(--line);overflow:hidden}
+.bar span{display:block;height:100%;background:var(--c2);border-radius:8px;transition:width .35s}
+.task{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:18px;padding:14px;margin-bottom:10px;border-left:5px solid var(--c0)}
+.chk{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;color:transparent;font-weight:800}
+.task.done .chk{background:var(--c2);border-color:var(--c2);color:#fff}
+.task.done .t{text-decoration:line-through;color:var(--mut)}
+.body{flex:1;min-width:0;text-align:left}
+.t{font-weight:700;overflow-wrap:anywhere}.tm{font-size:13px;color:var(--mut)}
+.empty{text-align:center;color:var(--mut);padding:48px 20px}
+.fab{position:fixed;right:18px;bottom:max(18px,env(safe-area-inset-bottom));height:56px;padding:0 24px;border-radius:28px;background:var(--acc);color:var(--on);font-weight:800;box-shadow:0 8px 24px rgba(79,91,255,.35)}
+.shade{position:fixed;inset:0;background:rgba(10,12,30,.5);display:none}
+.shade.open{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-radius:24px 24px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));transform:translateY(100%);transition:transform .25s}
+.shade.open .sheet{transform:none}
+input[type=text],input[type=time]{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:2px solid transparent;border-radius:14px;padding:13px;margin-bottom:12px}
+input:focus{outline:none;border-color:var(--acc)}
+.cats{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.cat{padding:8px 14px;border-radius:20px;border:2px solid var(--line);font-size:14px;font-weight:700}
+.cat.on{color:#fff;border-color:transparent}
+.row{display:flex;gap:10px}.row button{flex:1;height:50px;border-radius:14px;font-weight:800}
+.save{background:var(--acc);color:var(--on)}.del{background:var(--bg);color:#E5484D;flex:0 0 100px!important}
+</style>
+</head>
+<body>
+<h1 id="hi">Мої справи</h1>
+<p class="sub" id="date"></p>
+<div class="week" id="week"></div>
+<div class="prog"><div class="bar"><span id="bar" style="width:0"></span></div><span id="cnt"></span></div>
+<div id="list"></div>
+<button class="fab" id="add">+ Нова справа</button>
+
+<div class="shade" id="shade"><div class="sheet" onclick="event.stopPropagation()">
+<input type="text" id="title" placeholder="Що потрібно зробити?" maxlength="120">
+<input type="time" id="time">
+<div class="cats" id="cats"></div>
+<div class="row"><button class="del" id="del">Видалити</button><button class="save" id="save">Зберегти</button></div>
+</div></div>
+
+<script>
+const tg=window.Telegram&&Telegram.WebApp;
+if(tg){tg.ready();tg.expand()}
+const CS=tg&&tg.initData&&tg.CloudStorage||null;
+const store={
+ get:keys=>new Promise(r=>{if(CS)CS.getItems(keys,(e,v)=>r(e?{}:v));else{const o={};keys.forEach(k=>o[k]=localStorage.getItem(k)||'');r(o)}}),
+ set:(k,v)=>new Promise(r=>{if(CS)CS.setItem(k,v,()=>r());else{localStorage.setItem(k,v);r()}})
+};
+const CATS=[['Робота','--c0'],['Дім','--c1'],['Навчання','--c2'],['Особисте','--c3']];
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id);
+const buzz=()=>tg&&tg.HapticFeedback&&tg.HapticFeedback.impactOccurred('light');
+let sel=new Date(),cache={},editId=null,cat=0;
+const monday=d=>{const x=new Date(d);x.setDate(x.getDate()-((x.getDay()+6)%7));return x};
+
+async function loadWeek(){
+ const days=[...Array(7)].map((_,i)=>{const x=monday(sel);x.setDate(x.getDate()+i);return x});
+ const got=await store.get(days.map(d=>'d:'+iso(d)));
+ days.forEach(d=>{const k='d:'+iso(d);try{cache[iso(d)]=JSON.parse(got[k]||'[]')}catch(e){cache[iso(d)]=[]}});
+ render(days);
+}
+function render(days){
+ const today=iso(new Date()),key=iso(sel),list=(cache[key]||[]).slice().sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+ const name=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user&&tg.initDataUnsafe.user.first_name;
+ $('hi').textContent=name?'Привіт, '+name:'Мої справи';
+ $('date').textContent=sel.toLocaleDateString('uk-UA',{weekday:'long',day:'numeric',month:'long'});
+ $('week').innerHTML='<button class="nav" data-w="-7">‹</button>'+days.map(d=>{const k=iso(d);
+  return `<button class="day${k===key?' sel':''}${k===today?' today':''}${(cache[k]||[]).length?' has':''}" data-d="${k}">${d.toLocaleDateString('uk-UA',{weekday:'short'})}<b>${d.getDate()}</b><i></i></button>`}).join('')+'<button class="nav" data-w="7">›</button>';
+ const done=list.filter(t=>t.done).length;
+ $('bar').style.width=list.length?done/list.length*100+'%':'0';
+ $('cnt').textContent=list.length?`${done} з ${list.length}`:'';
+ $('list').innerHTML=list.length?list.map(t=>`<div class="task${t.done?' done':''}" style="border-left-color:var(${CATS[t.cat||0][1]})">
+  <button class="chk" data-c="${t.id}">✓</button>
+  <button class="body" data-e="${t.id}"><div class="t">${esc(t.title)}</div><div class="tm">${t.time||CATS[t.cat||0][0]}</div></button></div>`).join('')
+  :'<div class="empty">На цей день справ немає.<br>Натисни «+ Нова справа».</div>';
+}
+const save=()=>store.set('d:'+iso(sel),JSON.stringify(cache[iso(sel)]));
+
+document.addEventListener('click',async e=>{
+ const b=e.target.closest('button');if(!b)return;
+ if(b.dataset.d){sel=new Date(b.dataset.d+'T12:00:00');buzz();render([...document.querySelectorAll('.day')].map(x=>new Date(x.dataset.d+'T12:00:00')))}
+ if(b.dataset.w){sel.setDate(sel.getDate()+ +b.dataset.w);loadWeek()}
+ if(b.dataset.c){const t=cache[iso(sel)].find(t=>t.id===b.dataset.c);t.done=!t.done;buzz();await save();loadWeek()}
+ if(b.dataset.e)openSheet(b.dataset.e);
+});
+function drawCats(){$('cats').innerHTML=CATS.map((c,i)=>`<button class="cat${i===cat?' on':''}" data-k="${i}" style="${i===cat?'background:var('+c[1]+')':''}">${c[0]}</button>`).join('')}
+$('cats').onclick=e=>{const k=e.target.dataset.k;if(k!==undefined){cat=+k;drawCats()}};
+function openSheet(id){
+ editId=id||null;const t=id&&cache[iso(sel)].find(t=>t.id===id);
+ $('title').value=t?t.title:'';$('time').value=t?t.time||'':'';cat=t?t.cat||0:0;
+ $('del').style.display=t?'':'none';drawCats();$('shade').classList.add('open');setTimeout(()=>$('title').focus(),250);
+}
+const closeSheet=()=>$('shade').classList.remove('open');
+$('add').onclick=()=>openSheet();$('shade').onclick=closeSheet;
+$('save').onclick=async()=>{
+ const title=$('title').value.trim();if(!title){$('title').focus();return}
+ const list=cache[iso(sel)]=cache[iso(sel)]||[];
+ if(editId){Object.assign(list.find(t=>t.id===editId),{title,time:$('time').value,cat})}
+ else list.push({id:Date.now().toString(36),title,time:$('time').value,cat,done:false});
+ closeSheet();await save();loadWeek();
+};
+$('del').onclick=async()=>{cache[iso(sel)]=cache[iso(sel)].filter(t=>t.id!==editId);closeSheet();await save();loadWeek()};
+loadWeek();
+</script>
+</body>
+</html>
